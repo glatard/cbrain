@@ -135,6 +135,7 @@ CbrainRailsPortal::Application.routes.draw do
       post 'new', :path => 'new', :as => 'new'
       post 'operation'
       get  'batch_list'
+      get  'export'
       post 'update_multiple'
     end
   end

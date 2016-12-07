@@ -372,8 +372,6 @@ class CbrainTask < ActiveRecord::Base
     header
   end
 
-
-
   ##################################################################
   # Useful ID Generators
   ##################################################################
@@ -847,6 +845,39 @@ class CbrainTask < ActiveRecord::Base
   end
 
 
+  ###########################
+  # NIDM-W export mechanism #
+  ###########################
+
+  public
+  
+  # returns a JSON string containing the
+  # NIDM-W representation of this task
+  def nidm_w_export
+    tool_config = ToolConfig.find(self.tool_config_id)
+    tool        = Tool.find(tool_config.tool_id)
+    process = {
+      :id      => tool.id,
+      :name    => tool.name,
+      :version => tool_config.version_name,
+      :group   => tool.group_id,
+      
+    }
+    process_group = {
+      :id => tool.group_id,
+      :name => Group.find(tool.group_id).name
+    }
+    groups = []
+    groups.push(process_group)
+    processes = []
+    processes.push(process)
+    json_hash = {
+      :processes => processes,
+      :groups => groups
+    }
+    return JSON.pretty_generate(json_hash)
+  end
+  
 
   ##################################################################
   # Lifecycle hooks

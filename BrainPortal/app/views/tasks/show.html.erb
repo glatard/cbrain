@@ -91,6 +91,11 @@
       <%= link_to 'Edit Parameters', { :action => 'edit', :id => @task.id }, :class  => "button menu_button"  %>
     <% end %>
 
+    <!-- NIDM export -->
+    <% if (@task.status =~ /Completed|Failed|Duplicated|Terminated/) %>
+      <%= link_to 'Export to NIDM-W', { :action => 'export', :id => @task.id }, :class  => "button menu_button"  %>
+    <% end %>
+    
   </div>
 
 <% end %>

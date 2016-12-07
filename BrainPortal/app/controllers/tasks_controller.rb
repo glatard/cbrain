@@ -282,6 +282,92 @@ class TasksController < ApplicationController
 
   end
 
+  def edit #:nodoc:
+    @task        = current_user.available_tasks.find(params[:id])
+    @task.add_new_params_defaults # auto-adjust params with new defaults if needed
+    @toolname    = @task.name
+    @tool_config = @task.tool_config
+
+    if @task.class.properties[:cannot_be_edited]
+      flash[:error] = "This task is not meant to be edited.\n"
+      redirect_to :action => :show, :id => params[:id]
+      return
+    end
+
+    if @task.status !~ /Completed|Failed|Duplicated|Terminated/
+      flash[:error] = "You cannot edit the parameters of an active task.\n"
+      redirect_to :action => :show, :id => params[:id]
+      return
+    end
+
+    # In order to edit older tasks that don't have :interface_userfile_ids
+    # set, we initalize an empty one.
+    params = @task.params
+    params[:interface_userfile_ids] ||= []
+
+    # Old API stored the data_provider_id in params, so move it
+    @task.results_data_provider_id ||= params[:data_provider_id]
+    params.delete(:data_provider_id) # keep it clean
+
+    # Other common instance variables, such as @data_providers and @bourreaux
+    initialize_common_form_values
+    @bourreaux = [ @task.bourreau ] # override so we leave only one, even a non-active bourreau
+
+    # Generate the form.
+    respond_to do |format|
+      format.html # edit.html.erb
+    end
+
+  end
+
+  def edit #:nodoc:
+    @task        = current_user.available_tasks.find(params[:id])
+    @task.add_new_params_defaults # auto-adjust params with new defaults if needed
+    @toolname    = @task.name
+    @tool_config = @task.tool_config
+
+    if @task.class.properties[:cannot_be_edited]
+      flash[:error] = "This task is not meant to be edited.\n"
+      redirect_to :action => :show, :id => params[:id]
+      return
+    end
+
+    if @task.status !~ /Completed|Failed|Duplicated|Terminated/
+      flash[:error] = "You cannot edit the parameters of an active task.\n"
+      redirect_to :action => :show, :id => params[:id]
+      return
+    end
+
+    # In order to edit older tasks that don't have :interface_userfile_ids
+    # set, we initalize an empty one.
+    params = @task.params
+    params[:interface_userfile_ids] ||= []
+
+    # Old API stored the data_provider_id in params, so move it
+    @task.results_data_provider_id ||= params[:data_provider_id]
+    params.delete(:data_provider_id) # keep it clean
+
+    # Other common instance variables, such as @data_providers and @bourreaux
+    initialize_common_form_values
+    @bourreaux = [ @task.bourreau ] # override so we leave only one, even a non-active bourreau
+
+    # Generate the form.
+    respond_to do |format|
+      format.html # edit.html.erb
+    end
+
+  end
+
+  def export  #:nodoc:
+    @task          = current_user.available_tasks.find(params[:id])
+
+    # Generate the form.
+    respond_to do |format|
+      format.html # export.html.erb
+    end
+
+  end
+  
   def create #:nodoc:
     flash[:notice]     = ""
     flash[:error]      = ""

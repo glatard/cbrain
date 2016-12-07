@@ -1777,7 +1777,19 @@ chmod 755 ./.dockerjob.sh
     return docker_commands
   end
 
+  ###########################
+  # NIDM-W export mechanism #
+  ###########################
 
+  public
+  
+  # returns a JSON string containing the
+  # NIDM-W representation of this task
+  def nidm_w_export
+    json_hash = {:hello => "goodbye" }
+    return JSON.generate(json_hash)
+  end
+  
 
   ##################################################################
   # Internal Subtask Submission Mechanism
