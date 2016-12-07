@@ -874,6 +874,158 @@ class CbrainTask < ActiveRecord::Base
     }
     return JSON.pretty_generate(json_hash)
   end
+
+  ###########################
+  # NIDM-W export mechanism #
+  ###########################
+
+  public
+  
+  # returns a JSON string containing the
+  # NIDM-W representation of this task
+  def nidm_w_export
+    tool_config = ToolConfig.find(self.tool_config_id)
+    tool        = Tool.find(tool_config.tool_id)
+    process = {
+      :id      => tool.id,
+      :name    => tool.name,
+      :version => tool_config.version_name,
+      :group   => tool.group_id,
+      
+    }
+    # groups
+    group_ids = []
+    group_ids.push(tool.group_id)
+    # processes
+    processes = []
+    processes.push(process)
+    # inputs
+    inputs  = []
+    # outputs
+    outputs = []
+    # files
+    file_ids = []
+    output_file=false
+    params.each do |key,value|
+      type = "parameter"
+      values = [ value ].flatten # just to make sure that all values are arrays so that we can iterate safely hereafter
+      values.each do |v|
+        userfile = Userfile.find(v) rescue nil
+        unless userfile.nil?
+          type = "file"
+          file_ids.push(userfile.id)     unless file_ids.include?(userfile.id)
+          groups.push(userfile.group_id) unless group_ids.include?(userfile.group_id)
+          # check if this is an output file by comparing its creation
+          # timestamp to the task's (there is no easy way to identify
+          # output files for now)
+          output_file = userfile.created_at > self.created_at ? true : false
+        end  
+      end
+      param_hash = {
+        :name  => key,
+        :value => value,
+        :type  => type
+      }
+      if output_file
+        outputs.push(param_hash)
+      else
+        inputs.push(param_hash)
+      end
+    end
+
+    # Requirement
+    bourreau = Bourreau.find(self.bourreau_id)
+    requirement = "#{bourreau.cms_extra_qsub_args} #{tool_config.extra_qsub_args}"
+
+    # Job scheduler
+    job_scheduler = {
+      :name => bourreau.name,
+      :description => bourreau.description,
+      :url => bourreau.help_url,
+      :hostname => bourreau.cms_class == "ScirUnix" ? "localhost" : bourreau.actres_host,
+      :group => bourreau.group_id
+    }
+    group_ids.push(bourreau.group_id) unless group_ids.include?(bourreau.group_id)
+
+    # Workflow engine
+    workflow_engine = {
+      :website => BrainPortal.find(1).site_url_prefix,
+      :version => CBRAIN::CBRAIN_StartTime_Revision,
+      :type => "CBRAIN"
+    }
+    
+    # Agent
+    agent = {
+      :job_scheduler => job_scheduler,
+      :workflow_engine => workflow_engine
+    }
+
+    # Env variables
+    environment_variables = []
+    unless tool_config.env_array.nil? 
+      tool_config.env_array.each do |env|
+        environment_variables.push(
+          {
+            :name => env[0],
+            :value => env[1]
+          }
+        )
+      end
+    end
+
+    container=nil
+    unless tool_config.docker_image.nil?
+      container = {
+        :docker_image => tool_config.docker_image
+      }
+    end
+
+    consumption = {
+      :workdir_size => cluster_workdir_size
+    }
+    
+    # Runtime information
+    runtime_information = {
+      :environment_variables => environment_variables,
+      :container => container,
+      :consumption => consumption
+    }
+    
+    # Dataflow
+    dataflow = {
+      :inputs => inputs,
+      :outputs => outputs,
+      :requirement => requirement,
+      :agent => agent,
+      :runtime_information => runtime_information
+    }
+    
+    # Expand file and group ids
+    expanded_files = file_ids.map { |id|
+      userfile = Userfile.find(id)
+      {
+        :id    => userfile.id,
+        :name  => userfile.name,
+        :type  => userfile.type,
+        :size  => userfile.size,
+        :group => userfile.group_id
+      }
+    }
+    expanded_groups = group_ids.map { |id|
+        {
+          :id => id,
+          :name => Group.find(id).name
+        }
+    }
+    # Build JSON object
+    json_hash = {
+      :processes => processes,
+      :dataflow => dataflow,
+      :files => expanded_files,
+      :groups => expanded_groups
+    }
+    return JSON.pretty_generate(json_hash)
+  end
   
 
   ##################################################################

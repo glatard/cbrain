@@ -92,9 +92,7 @@
     <% end %>
 
     <!-- NIDM export -->
-    <% if (@task.status =~ /Completed|Failed|Duplicated|Terminated/) %>
-      <%= link_to 'Export to NIDM-W', { :action => 'export', :id => @task.id }, :class  => "button menu_button"  %>
-    <% end %>
+    <%= link_to 'Export to NIDM-W', { :action => 'export', :id => @task.id }, :class  => "button menu_button"  %>
     
   </div>
 
