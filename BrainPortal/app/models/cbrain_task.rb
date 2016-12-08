@@ -880,10 +880,32 @@ class CbrainTask < ActiveRecord::Base
   ###########################
 
   public
+
+  # Returns a JSON string containing the Boutiques descriptor
+  # associated to the task if it exists (nil otherwise)
+  def boutiques_descriptor
+    return @task_descriptor if @task_descriptor # do not search for descriptor twice
+    @task_descriptor=nil
+    descriptor_file_names=Dir.glob(
+      File.join(Rails.root,
+                File.join("cbrain_plugins",
+                          File.join("installed-plugins",
+                                    File.join("cbrain_task_descriptors",
+                                              "*.json")))))
+    descriptor_file_names.each do |descriptor_file_name|
+      json_descriptor = JSON.parse(File.read(descriptor_file_name))
+      @task_descriptor = json_descriptor if self.pretty_name == json_descriptor["name"]
+    end
+    return @task_descriptor
+  end
   
-  # returns a JSON string containing the
-  # NIDM-W representation of this task
+  # Returns a JSON string containing the
+  # NIDM-W representation of this task.
+  # Task has to be from a Tool described with Boutiques.
   def nidm_w_export
+    # Find Boutiques descriptor of task
+    raise "Cannot find Boutiques descriptor for task #{self.type}" unless self.boutiques_descriptor
+    # process
     tool_config = ToolConfig.find(self.tool_config_id)
     tool        = Tool.find(tool_config.tool_id)
     process = {
@@ -906,33 +928,44 @@ class CbrainTask < ActiveRecord::Base
     # files
     file_ids = []
     output_file=false
-    params.each do |key,value|
-      type = "parameter"
-      values = [ value ].flatten # just to make sure that all values are arrays so that we can iterate safely hereafter
-      values.each do |v|
-        userfile = Userfile.find(v) rescue nil
-        unless userfile.nil?
-          type = "file"
-          file_ids.push(userfile.id)     unless file_ids.include?(userfile.id)
-          groups.push(userfile.group_id) unless group_ids.include?(userfile.group_id)
-          # check if this is an output file by comparing its creation
-          # timestamp to the task's (there is no easy way to identify
-          # output files for now)
-          output_file = userfile.created_at > self.created_at ? true : false
-        end  
-      end
-      param_hash = {
-        :name  => key,
-        :value => value,
-        :type  => type
-      }
-      if output_file
-        outputs.push(param_hash)
-      else
-        inputs.push(param_hash)
+
+    # inputs
+    @task_descriptor["inputs"].each do |input|
+      if params[input["id"]]
+        inputs.push({
+                      :name => input["id"],
+                      :value => params[input["id"]],
+                      :type => input["type"]
+                    })
+        if input["type"] == "File"
+          file_id = params[input["id"]]
+          userfile = Userfile.find(file_id) rescue nil
+          break unless userfile
+          file_ids.push(file_id) unless file_ids.include?(file_id)
+          group_id = userfile.group_id
+          group_ids.push(group_id) unless group_ids.include?(group_id)
+        end
       end
     end
 
+    # outputs
+    @task_descriptor["output-files"].each do |output|
+      if params[output["id"]]
+        [ params[output["id"]] ].flatten.each do |file_id|
+          userfile = Userfile.find(file_id) rescue nil
+          break unless userfile # param is skipped if file doesn't exist (yet or any more)
+          outputs.push({
+                         :name => output["id"],
+                         :value => params[output["id"]],
+                         :type => "File"
+                       })
+          file_ids.push(file_id) unless file_ids.include?(file_id)
+          group_id = userfile.group_id
+          group_ids.push(group_id) unless group_ids.include?(group_id)
+        end
+      end
+    end
+    
     # Requirement
     bourreau = Bourreau.find(self.bourreau_id)
     requirement = "#{bourreau.cms_extra_qsub_args} #{tool_config.extra_qsub_args}"
@@ -941,7 +974,8 @@ class CbrainTask < ActiveRecord::Base
     job_scheduler = {
       :name => bourreau.name,
       :description => bourreau.description,
-      :url => bourreau.help_url,
+      :type => bourreau.cms_class.sub("Scir",""),
+      :url => bourreau.external_status_page_url,
       :hostname => bourreau.cms_class == "ScirUnix" ? "localhost" : bourreau.actres_host,
       :group => bourreau.group_id
     }
@@ -1000,7 +1034,7 @@ class CbrainTask < ActiveRecord::Base
       :runtime_information => runtime_information
     }
     
-    # Expand file and group ids
+    # Expand file and group id
     expanded_files = file_ids.map { |id|
       userfile = Userfile.find(id)
       {

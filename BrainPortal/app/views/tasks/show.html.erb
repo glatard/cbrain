@@ -92,7 +92,9 @@
     <% end %>
 
     <!-- NIDM export -->
+    <% if @task.boutiques_descriptor %>
     <%= link_to 'Export to NIDM-W', { :action => 'export', :id => @task.id }, :class  => "button menu_button"  %>
+    <% end %>
     
   </div>
 
